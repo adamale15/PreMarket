@@ -384,7 +384,7 @@ export default function MainClient() {
               insight platform
             </span>
             <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-tight bg-gradient-to-r from-foreground via-foreground/90 to-foreground/70 bg-clip-text text-transparent">
-              Predict future trends from today's signals
+              Predict future trends from today&apos;s signals
             </h1>
             <p className="text-lg text-muted-foreground max-w-xl leading-relaxed">
               We analyze current news, research, and market signals to predict
@@ -413,7 +413,7 @@ export default function MainClient() {
               </a>
             </div>
             <p className="text-xs text-muted-foreground">
-              No spam. Tune alerts like "notify me when probability ≥ 50%".
+              No spam. Tune alerts like &quot;notify me when probability ≥ 50%&quot;.
             </p>
           </div>
 
@@ -437,7 +437,7 @@ export default function MainClient() {
                 />
               </div>
               <div className="mt-6 rounded-xl backdrop-blur-sm bg-secondary/50 dark:bg-secondary/30 border border-border/50 p-4 text-sm text-muted-foreground">
-                Ask: "If regulation tightens, how does the timeline shift?"
+                Ask: &quot;If regulation tightens, how does the timeline shift?&quot;
               </div>
             </div>
           </div>
@@ -644,7 +644,7 @@ function InterestModal({
             Pick your topics of interest
           </h3>
           <p className="text-sm text-muted-foreground mt-2">
-            We'll personalize your feed and alerts.
+            We&apos;ll personalize your feed and alerts.
           </p>
         </div>
 

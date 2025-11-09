@@ -484,7 +484,7 @@ export default function TrendDetail({
                   />
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed pt-1">
-                  You will receive alerts when Claude's score meets your
+                  You will receive alerts when Claude&apos;s score meets your
                   threshold.
                 </p>
               </section>
@@ -564,7 +564,7 @@ export default function TrendDetail({
                       Your Question:
                     </p>
                     <p className="text-sm text-foreground italic">
-                      "{question}"
+                      &quot;{question}&quot;
                     </p>
                   </div>
                 )}
