@@ -102,17 +102,33 @@
   body {
     @apply bg-background text-foreground antialiased;
     background-image: 
+      /* Base halftone dot pattern - most visible layer */
+      url("data:image/svg+xml,%3Csvg width='45' height='45' viewBox='0 0 45 45' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23000000' fill-opacity='0.15'%3E%3Ccircle cx='22.5' cy='22.5' r='2'/%3E%3C/g%3E%3C/svg%3E"),
+      /* Halftone pattern - denser in corners */
+      radial-gradient(ellipse 1000px 800px at 0% 0%, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.15) 25%, rgba(0, 0, 0, 0.08) 45%, rgba(0, 0, 0, 0.03) 65%, transparent 80%),
+      radial-gradient(ellipse 1000px 800px at 100% 100%, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.15) 25%, rgba(0, 0, 0, 0.08) 45%, rgba(0, 0, 0, 0.03) 65%, transparent 80%),
+      /* Existing gradients */
       radial-gradient(1200px 600px at 80% -10%, hsl(258 100% 90% / 0.35), transparent),
       radial-gradient(900px 400px at -10% 10%, hsl(266 83% 88% / 0.3), transparent);
+    background-size: 45px 45px, 200% 200%, 200% 200%, 100%, 100%;
+    background-position: 0 0, top left, bottom right, center, center;
     background-attachment: fixed;
     transition: background-color 0.3s ease, color 0.3s ease;
   }
 
   .dark body {
     background-image: 
+      /* Base halftone dot pattern for dark mode - most visible layer */
+      url("data:image/svg+xml,%3Csvg width='45' height='45' viewBox='0 0 45 45' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.12'%3E%3Ccircle cx='22.5' cy='22.5' r='2'/%3E%3C/g%3E%3C/svg%3E"),
+      /* Halftone pattern - denser in corners for dark mode */
+      radial-gradient(ellipse 1000px 800px at 0% 0%, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 25%, rgba(255, 255, 255, 0.04) 45%, rgba(255, 255, 255, 0.015) 65%, transparent 80%),
+      radial-gradient(ellipse 1000px 800px at 100% 100%, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 25%, rgba(255, 255, 255, 0.04) 45%, rgba(255, 255, 255, 0.015) 65%, transparent 80%),
+      /* Existing gradients */
       radial-gradient(1200px 600px at 80% -10%, hsl(258 100% 40% / 0.15), transparent),
       radial-gradient(900px 400px at -10% 10%, hsl(266 83% 35% / 0.12), transparent),
       radial-gradient(800px 600px at 50% 50%, hsl(240 100% 5% / 0.8), transparent);
+    background-size: 45px 45px, 200% 200%, 200% 200%, 100%, 100%, 100%;
+    background-position: 0 0, top left, bottom right, center, center, center;
   }
 
   /* Glassmorphism utility classes */

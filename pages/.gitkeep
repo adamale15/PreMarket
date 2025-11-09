@@ -1,0 +1,2 @@
+# This directory is kept to prevent Next.js file system scanning errors
+# Next.js checks for both app/ and pages/ directories during development

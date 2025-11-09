@@ -82,7 +82,9 @@ function KPI({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl backdrop-blur-xl bg-card/50 dark:bg-card/30 border border-border/50 p-6 shadow-lg hover:shadow-2xl transition-all duration-300 hover:scale-[1.02] hover:border-primary/30">
       <div className="text-sm text-muted-foreground font-medium">{label}</div>
-      <div className="mt-2 text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">{value}</div>
+      <div className="mt-2 text-3xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
+        {value}
+      </div>
     </div>
   );
 }
