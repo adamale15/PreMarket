@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 import { Sparkles, ChevronDown } from "lucide-react";
 import TrendCard, { Trend } from "@/components/trends/TrendCard";
 import TrendDetail from "@/components/trends/TrendDetail";
@@ -146,51 +148,171 @@ const getSampleTrends = (baseDate: number): Trend[] => [
 ];
 
 export default function MainClient() {
+  const router = useRouter();
+  const { isSignedIn, user } = useUser();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<Trend | null>(null);
   const [showInterestModal, setShowInterestModal] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [interests, setInterests] = useState<string[]>([]);
+  const [realTrends, setRealTrends] = useState<Trend[]>([]);
+  const [loadingTrends, setLoadingTrends] = useState(false);
 
   // Initialize interests and mounted state on client only
   useEffect(() => {
     setMounted(true);
-    try {
-      const stored = localStorage.getItem("tf_interests");
-      if (stored) {
-        setInterests(JSON.parse(stored));
+
+    // Fetch interests from Supabase if user is signed in
+    const fetchInterests = async () => {
+      if (isSignedIn) {
+        try {
+          const response = await fetch("/api/user/interests");
+          const data = await response.json();
+          if (data.interests && Array.isArray(data.interests)) {
+            setInterests(data.interests);
+          }
+        } catch (error) {
+          console.error("Error fetching interests:", error);
+          // Fallback to localStorage for migration
+          try {
+            const stored = localStorage.getItem("tf_interests");
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              if (Array.isArray(parsed)) {
+                setInterests(parsed);
+                // Migrate to Supabase
+                await fetch("/api/user/interests", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ interests: parsed }),
+                });
+              }
+            }
+          } catch {
+            // Ignore errors
+          }
+        }
+      } else {
+        // For non-signed-in users, use localStorage
+        try {
+          const stored = localStorage.getItem("tf_interests");
+          if (stored) {
+            setInterests(JSON.parse(stored));
+          }
+        } catch {
+          // Ignore errors
+        }
       }
+    };
+
+    fetchInterests();
+  }, [isSignedIn]);
+
+  // Fetch real trends from news API when interests are set
+  useEffect(() => {
+    if (!mounted) return;
+
+    const fetchTrends = async () => {
+      setLoadingTrends(true);
+      try {
+        // Build API URL for predictive trends based on interests
+        let url = "/api/trends/predict?";
+        if (interests.length > 0) {
+          url += `interests=${encodeURIComponent(interests.join(","))}`;
+          console.log(`Fetching trends for interests: ${interests.join(", ")}`);
+        } else {
+          // If no interests, show empty state
+          setRealTrends([]);
+          setLoadingTrends(false);
+          return;
+        }
+
+        console.log(`Fetching from: ${url}`);
+        const response = await fetch(url);
+        const data = await response.json();
+        console.log(`API response:`, {
+          trendsCount: data.trends?.length || 0,
+          interests,
+        });
+
+        if (data.trends && data.trends.length > 0) {
+          console.log(
+            `Fetched ${data.trends.length} trends for interests:`,
+            interests,
+          );
+          setRealTrends(data.trends);
+
+          // Store trends in Supabase (non-blocking)
+          fetch("/api/trends/store", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data.trends),
+          }).catch((error) => {
+            console.error("Error storing trends:", error);
+          });
+        } else {
+          console.log("No trends returned from API");
+          // Don't show sample trends if they don't match interests
+          setRealTrends([]);
+        }
+      } catch (error) {
+        console.error("Error fetching trends:", error);
+        // Don't show sample trends on error - let user know we're working on it
+        setRealTrends([]);
+      } finally {
+        setLoadingTrends(false);
+      }
+    };
+
+    fetchTrends();
+  }, [mounted, interests]);
+
+  useEffect(() => {
+    if (!mounted) return;
+
+    // Save interests to Supabase if user is signed in
+    if (isSignedIn && interests.length >= 0) {
+      fetch("/api/user/interests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interests }),
+      }).catch((error) => {
+        console.error("Error saving interests:", error);
+      });
+    }
+
+    // Also save to localStorage as backup
+    try {
+      localStorage.setItem("tf_interests", JSON.stringify(interests));
     } catch {
       // Ignore errors
     }
-  }, []);
-
-  const [baseDate, setBaseDate] = useState(0);
-
-  useEffect(() => {
-    if (mounted && baseDate === 0) {
-      setBaseDate(Date.now());
-    }
-  }, [mounted, baseDate]);
-
-  const sampleTrends = useMemo(() => {
-    if (!mounted || baseDate === 0) return [];
-    return getSampleTrends(baseDate);
-  }, [mounted, baseDate]);
-
-  useEffect(() => {
-    if (mounted) {
-      localStorage.setItem("tf_interests", JSON.stringify(interests));
-    }
-  }, [interests, mounted]);
+  }, [interests, mounted, isSignedIn]);
 
   const filtered = useMemo(() => {
-    if (!mounted || sampleTrends.length === 0) return [];
-    if (interests.length === 0) return sampleTrends;
-    return sampleTrends.filter((t) =>
-      interests.some((i) => t.category.toLowerCase().includes(i.toLowerCase())),
-    );
-  }, [interests, sampleTrends, mounted]);
+    if (!mounted || realTrends.length === 0) return [];
+    if (interests.length === 0) return realTrends;
+
+    // Filter trends by interests
+    const filtered = realTrends.filter((t) => {
+      const categoryLower = t.category.toLowerCase();
+      return interests.some((i) => {
+        const interestLower = i.toLowerCase();
+        // Check multiple matching strategies
+        return (
+          categoryLower.includes(interestLower) ||
+          interestLower.includes(categoryLower) ||
+          // Handle "AI • Policy" format - check each part
+          categoryLower
+            .split(/[•·\-\s]+/)
+            .some((part) => part.trim() === interestLower)
+        );
+      });
+    });
+
+    // Only return filtered trends - don't show unrelated trends
+    return filtered;
+  }, [interests, realTrends, mounted]);
 
   return (
     <div>
@@ -207,16 +329,23 @@ export default function MainClient() {
               insight platform
             </span>
             <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-tight bg-gradient-to-r from-foreground via-foreground/90 to-foreground/70 bg-clip-text text-transparent">
-              See tomorrow's trends today
+              Predict future trends from today's signals
             </h1>
             <p className="text-lg text-muted-foreground max-w-xl leading-relaxed">
-              We analyze news, social, and real-time sources to forecast what
-              will trend. Subscribe, explore sources, and ask the in-built AI
-              for outcomes and probabilities.
+              We analyze current news, research, and market signals to predict
+              what trends will emerge in the coming months. Select your
+              interests to see personalized future predictions with probability
+              scores and timelines.
             </p>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setShowInterestModal(true)}
+                onClick={() => {
+                  if (isSignedIn) {
+                    setShowInterestModal(true);
+                  } else {
+                    router.push("/sign-in");
+                  }
+                }}
                 className="inline-flex items-center justify-center rounded-xl backdrop-blur-sm bg-primary/90 dark:bg-primary/80 text-primary-foreground px-6 py-3 text-sm font-semibold shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300 border border-primary/20"
               >
                 Get started — pick interests
@@ -264,10 +393,11 @@ export default function MainClient() {
         <div className="flex items-end justify-between gap-4">
           <div>
             <h2 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-              Possible future trends
+              Future trend predictions
             </h2>
             <p className="text-muted-foreground mt-2">
-              Signals from news, X, research, and more.
+              Predictive insights based on current signals from news, research,
+              and market data.
             </p>
           </div>
           <button
@@ -277,18 +407,51 @@ export default function MainClient() {
             Filter <ChevronDown className="h-4 w-4" />
           </button>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((t) => (
-            <TrendCard
-              key={t.id}
-              trend={t}
-              onOpen={(x) => {
-                setActive(x);
-                setOpen(true);
+        {loadingTrends ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-muted-foreground">
+              Analyzing signals and generating predictions...
+            </div>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            <div className="text-muted-foreground text-center">
+              <p className="text-lg font-medium mb-2">
+                No trends found for your selected interests
+              </p>
+              <p className="text-sm">
+                {interests.length > 0
+                  ? `We couldn't find relevant trends for: ${interests.join(", ")}. Try selecting different interests or check back later.`
+                  : "Please select your interests to see personalized trends."}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                if (isSignedIn) {
+                  setShowInterestModal(true);
+                } else {
+                  router.push("/sign-in");
+                }
               }}
-            />
-          ))}
-        </div>
+              className="inline-flex items-center justify-center rounded-xl backdrop-blur-sm bg-primary/90 dark:bg-primary/80 text-primary-foreground px-6 py-3 text-sm font-semibold shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300 border border-primary/20"
+            >
+              {interests.length > 0 ? "Change interests" : "Select interests"}
+            </button>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filtered.map((t) => (
+              <TrendCard
+                key={t.id}
+                trend={t}
+                onOpen={(x) => {
+                  setActive(x);
+                  setOpen(true);
+                }}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       <InterestModal

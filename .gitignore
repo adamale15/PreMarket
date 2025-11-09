@@ -91,3 +91,6 @@ logs
 # Config (but keep .env.example)
 .config/
 !.env.example
+
+# Documentation files
+*.md

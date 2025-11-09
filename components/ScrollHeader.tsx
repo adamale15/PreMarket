@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Sparkles, Bell } from "lucide-react";
+import { useUser, SignOutButton } from "@clerk/nextjs";
+import { Sparkles, Bell, LogOut } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 export function ScrollHeader() {
+  const { isSignedIn } = useUser();
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
@@ -88,27 +90,71 @@ export function ScrollHeader() {
             </Link>
           </nav>
           <div className="flex items-center gap-3 flex-shrink-0 z-10 ml-auto">
-            <button
-              className={cn(
-                "inline-flex items-center gap-2 rounded-lg backdrop-blur-sm bg-primary/90 dark:bg-primary/80 text-primary-foreground font-semibold shadow-lg hover:shadow-xl hover:scale-105 transition-[padding,font-size,transform,box-shadow] duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] border border-primary/20 whitespace-nowrap",
-                isScrolled ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm",
-              )}
-            >
-              <Bell
+            {isSignedIn && (
+              <button
                 className={cn(
-                  "transition-[width,height] duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] flex-shrink-0",
-                  isScrolled ? "h-3.5 w-3.5" : "h-4 w-4",
-                )}
-              />
-              <span
-                className={cn(
-                  "transition-[opacity,width] duration-500 ease-out overflow-hidden whitespace-nowrap",
-                  isScrolled ? "opacity-0 w-0" : "opacity-100 w-auto",
+                  "inline-flex items-center gap-2 rounded-lg backdrop-blur-sm bg-primary/90 dark:bg-primary/80 text-primary-foreground font-semibold shadow-lg hover:shadow-xl hover:scale-105 transition-[padding,font-size,transform,box-shadow] duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] border border-primary/20 whitespace-nowrap",
+                  isScrolled ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm",
                 )}
               >
-                Notifications
-              </span>
-            </button>
+                <Bell
+                  className={cn(
+                    "transition-[width,height] duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] flex-shrink-0",
+                    isScrolled ? "h-3.5 w-3.5" : "h-4 w-4",
+                  )}
+                />
+                <span
+                  className={cn(
+                    "transition-[opacity,width] duration-500 ease-out overflow-hidden whitespace-nowrap",
+                    isScrolled ? "opacity-0 w-0" : "opacity-100 w-auto",
+                  )}
+                >
+                  Notifications
+                </span>
+              </button>
+            )}
+            {isSignedIn ? (
+              <SignOutButton>
+                <button
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-lg backdrop-blur-sm bg-background/50 dark:bg-background/30 border border-border/50 text-foreground hover:bg-background/70 dark:hover:bg-background/50 font-medium shadow-lg hover:shadow-xl transition-all duration-300 whitespace-nowrap",
+                    isScrolled ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm",
+                  )}
+                >
+                  <LogOut
+                    className={cn(
+                      "transition-[width,height] duration-300 flex-shrink-0",
+                      isScrolled ? "h-3.5 w-3.5" : "h-4 w-4",
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "transition-[opacity,width] duration-500 ease-out overflow-hidden whitespace-nowrap",
+                      isScrolled ? "opacity-0 w-0" : "opacity-100 w-auto",
+                    )}
+                  >
+                    Sign out
+                  </span>
+                </button>
+              </SignOutButton>
+            ) : (
+              <Link
+                href="/sign-in"
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-lg backdrop-blur-sm bg-primary/90 dark:bg-primary/80 text-primary-foreground font-semibold shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 border border-primary/20 whitespace-nowrap",
+                  isScrolled ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm",
+                )}
+              >
+                <span
+                  className={cn(
+                    "transition-[opacity,width] duration-500 ease-out overflow-hidden whitespace-nowrap",
+                    isScrolled ? "opacity-0 w-0" : "opacity-100 w-auto",
+                  )}
+                >
+                  Sign in
+                </span>
+              </Link>
+            )}
             <ThemeToggle />
           </div>
         </div>
