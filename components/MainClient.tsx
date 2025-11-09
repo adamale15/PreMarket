@@ -4,9 +4,17 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
-import { Sparkles, ChevronDown } from "lucide-react";
+import { Sparkles, ChevronDown, Filter } from "lucide-react";
 import TrendCard, { Trend } from "@/components/trends/TrendCard";
 import TrendDetail from "@/components/trends/TrendDetail";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // Generate sample trends with a base date to avoid hydration mismatches
 const getSampleTrends = (baseDate: number): Trend[] => [
@@ -157,6 +165,8 @@ export default function MainClient() {
   const [interests, setInterests] = useState<string[]>([]);
   const [realTrends, setRealTrends] = useState<Trend[]>([]);
   const [loadingTrends, setLoadingTrends] = useState(false);
+  const [filterProbability, setFilterProbability] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("probability-desc");
 
   // Initialize interests and mounted state on client only
   useEffect(() => {
@@ -294,7 +304,7 @@ export default function MainClient() {
     if (interests.length === 0) return realTrends;
 
     // Filter trends by interests
-    const filtered = realTrends.filter((t) => {
+    let filtered = realTrends.filter((t) => {
       const categoryLower = t.category.toLowerCase();
       return interests.some((i) => {
         const interestLower = i.toLowerCase();
@@ -310,9 +320,54 @@ export default function MainClient() {
       });
     });
 
-    // Only return filtered trends - don't show unrelated trends
+    // Apply probability filter
+    if (filterProbability !== "all") {
+      filtered = filtered.filter((t) => {
+        const prob = t.probability || 0;
+        switch (filterProbability) {
+          case "high":
+            return prob >= 60;
+          case "medium":
+            return prob >= 40 && prob < 60;
+          case "low":
+            return prob < 40;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Apply sorting
+    filtered = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case "probability-desc":
+          return (b.probability || 0) - (a.probability || 0);
+        case "probability-asc":
+          return (a.probability || 0) - (b.probability || 0);
+        case "date-desc":
+          // Sort by first timeline date if available
+          const aDate = a.timeline?.[0]?.date
+            ? new Date(a.timeline[0].date).getTime()
+            : 0;
+          const bDate = b.timeline?.[0]?.date
+            ? new Date(b.timeline[0].date).getTime()
+            : 0;
+          return bDate - aDate;
+        case "date-asc":
+          const aDateAsc = a.timeline?.[0]?.date
+            ? new Date(a.timeline[0].date).getTime()
+            : 0;
+          const bDateAsc = b.timeline?.[0]?.date
+            ? new Date(b.timeline[0].date).getTime()
+            : 0;
+          return aDateAsc - bDateAsc;
+        default:
+          return 0;
+      }
+    });
+
     return filtered;
-  }, [interests, realTrends, mounted]);
+  }, [interests, realTrends, mounted, filterProbability, sortBy]);
 
   return (
     <div>
@@ -400,12 +455,68 @@ export default function MainClient() {
               and market data.
             </p>
           </div>
-          <button
-            id="filter-btn"
-            className="inline-flex items-center gap-2 rounded-xl backdrop-blur-xl bg-background/50 dark:bg-background/30 border border-border/50 px-4 py-2 text-sm font-medium hover:bg-background/80 dark:hover:bg-background/50 transition-all duration-300 shadow-lg hover:scale-105"
-          >
-            Filter <ChevronDown className="h-4 w-4" />
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              id="filter-btn"
+              className="inline-flex items-center gap-2 rounded-xl backdrop-blur-xl bg-background/50 dark:bg-background/30 border border-border/50 px-4 py-2 text-sm font-medium hover:bg-background/80 dark:hover:bg-background/50 transition-all duration-300 shadow-lg hover:scale-105"
+            >
+              <Filter className="h-4 w-4" />
+              Filter <ChevronDown className="h-4 w-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Probability</DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={() => setFilterProbability("all")}
+                className={filterProbability === "all" ? "bg-accent" : ""}
+              >
+                All probabilities
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setFilterProbability("high")}
+                className={filterProbability === "high" ? "bg-accent" : ""}
+              >
+                High (≥60%)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setFilterProbability("medium")}
+                className={filterProbability === "medium" ? "bg-accent" : ""}
+              >
+                Medium (40-59%)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setFilterProbability("low")}
+                className={filterProbability === "low" ? "bg-accent" : ""}
+              >
+                Low ({"<"} 40%)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={() => setSortBy("probability-desc")}
+                className={sortBy === "probability-desc" ? "bg-accent" : ""}
+              >
+                Probability (High → Low)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setSortBy("probability-asc")}
+                className={sortBy === "probability-asc" ? "bg-accent" : ""}
+              >
+                Probability (Low → High)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setSortBy("date-desc")}
+                className={sortBy === "date-desc" ? "bg-accent" : ""}
+              >
+                Date (Newest First)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setSortBy("date-asc")}
+                className={sortBy === "date-asc" ? "bg-accent" : ""}
+              >
+                Date (Oldest First)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         {loadingTrends ? (
           <div className="flex items-center justify-center py-12">

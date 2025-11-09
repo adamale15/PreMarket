@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import Anthropic from "@anthropic-ai/sdk";
 
 // Polymarket Gamma API integration
 const POLYMARKET_API_BASE = "https://gamma-api.polymarket.com";
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
 
 interface PolymarketEvent {
   id: string;
@@ -1891,6 +1893,93 @@ function extractKeywords(text: string, category?: string): string[] {
     .slice(0, 25); // Limit to top 25 most relevant keywords
 }
 
+// Use Claude to rank and filter Polymarket events by semantic relevance
+async function rankEventsWithClaude(
+  events: PolymarketEvent[],
+  trendTitle: string,
+  trendSummary: string,
+  category: string,
+  limit: number,
+): Promise<PolymarketEvent[]> {
+  if (!ANTHROPIC_API_KEY || events.length === 0) {
+    return events.slice(0, limit);
+  }
+
+  try {
+    const anthropic = new Anthropic({
+      apiKey: ANTHROPIC_API_KEY,
+    });
+
+    // Prepare event list for Claude (limit to avoid token limits)
+    const eventsToRank = events.slice(0, 30);
+    const eventsList = eventsToRank
+      .map(
+        (event, index) =>
+          `${index + 1}. "${event.title}"${event.description ? ` - ${event.description.substring(0, 200)}` : ""}`,
+      )
+      .join("\n");
+
+    const systemPrompt = `You are an expert at matching prediction market events to trends. Your task is to identify which Polymarket events are semantically relevant to a given trend, even if they don't share exact keywords.
+
+Consider:
+- Semantic similarity (e.g., "NHL playoffs" matches "hockey championship")
+- Related concepts (e.g., "presidential election" matches "political campaign")
+- Context and domain (e.g., "AI regulation" matches "tech policy")
+- Exclude events that are only tangentially related or completely unrelated
+
+Return ONLY a JSON array of numbers (1-indexed) representing the most relevant events, ordered by relevance (most relevant first). Limit to the top ${limit} events.`;
+
+    const userPrompt = `Trend Title: "${trendTitle}"
+Trend Summary: "${trendSummary}"
+Category: ${category}
+
+Polymarket Events:
+${eventsList}
+
+Which events are semantically relevant to this trend? Return a JSON array of event numbers (1-indexed), ordered by relevance: [1, 5, 3, ...]`;
+
+    const message = await anthropic.messages.create({
+      model: "claude-3-haiku-20240307", // Use Haiku for faster, cheaper analysis
+      max_tokens: 500,
+      system: systemPrompt,
+      messages: [
+        {
+          role: "user",
+          content: userPrompt,
+        },
+      ],
+    });
+
+    const responseText =
+      message.content[0].type === "text" ? message.content[0].text : "";
+
+    // Extract JSON array from response
+    const jsonMatch = responseText.match(/\[[\d,\s]+\]/);
+    if (jsonMatch) {
+      const rankedIndices: number[] = JSON.parse(jsonMatch[0]);
+      // Convert 1-indexed to 0-indexed and filter valid indices
+      const rankedEvents = rankedIndices
+        .map((idx) => idx - 1)
+        .filter((idx) => idx >= 0 && idx < eventsToRank.length)
+        .map((idx) => eventsToRank[idx])
+        .filter((event) => event !== undefined);
+
+      // If Claude returned valid rankings, use them
+      if (rankedEvents.length > 0) {
+        return rankedEvents.slice(0, limit);
+      }
+    }
+
+    // Fallback: return original events if Claude response is invalid
+    console.warn("Claude returned invalid ranking, using original order");
+    return events.slice(0, limit);
+  } catch (error: any) {
+    console.error("Error using Claude to rank events:", error);
+    // Fallback to original keyword matching
+    return events.slice(0, limit);
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const category = searchParams.get("category");
@@ -1964,12 +2053,34 @@ export async function GET(request: Request) {
     }
 
     // Fetch similar events from Polymarket using trend-specific keywords
-    const events = await searchPolymarketEvents(
+    // Fetch more events initially for Claude to rank
+    let events = await searchPolymarketEvents(
       prioritizedKeywords,
-      limit,
+      limit * 2, // Fetch more for Claude to rank
       category || undefined,
       title || undefined,
     );
+
+    // If Claude API is available, use it to improve relevance
+    if (ANTHROPIC_API_KEY && events.length > 0 && title) {
+      try {
+        events = await rankEventsWithClaude(
+          events,
+          title,
+          summary || "",
+          category || "",
+          limit,
+        );
+        console.log(`Claude ranked ${events.length} events for relevance`);
+      } catch (claudeError) {
+        console.warn("Claude ranking failed, using keyword matching:", claudeError);
+        // Fall back to keyword matching - just take top results
+        events = events.slice(0, limit);
+      }
+    } else {
+      // If no Claude, just take top results from keyword matching
+      events = events.slice(0, limit);
+    }
 
     // Format events to match our similarEvents structure
     const similarEvents = events.map((event) => ({

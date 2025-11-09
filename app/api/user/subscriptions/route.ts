@@ -86,7 +86,22 @@ export async function GET(request: Request) {
 
     // Create a map of trend_id -> trend data
     const trendsMap = new Map();
+    
+    // Process all trends - only filter out obvious placeholders
     (trends || []).forEach((trend: any) => {
+      // Only filter out clear placeholders (not real trends)
+      const isPlaceholder = 
+        (trend.title === `Trend ${trend.id}`) ||
+        (trend.summary === "Trend subscription" && trend.title?.startsWith("Trend ")) ||
+        (!trend.title || trend.title.trim() === "");
+      
+      // Skip only obvious placeholders
+      if (isPlaceholder) {
+        console.log(`Filtering out placeholder trend: ${trend.id}`);
+        return;
+      }
+
+      // Use real trend data
       trendsMap.set(trend.id, {
         id: trend.id,
         title: trend.title,
@@ -100,12 +115,20 @@ export async function GET(request: Request) {
     });
 
     // Format subscriptions with trend data
-    const formattedSubscriptions = subscriptions.map((sub: any) => ({
-      trend_id: sub.trend_id,
-      threshold: sub.threshold,
-      subscribed: sub.subscribed,
-      trend: trendsMap.get(sub.trend_id) || null,
-    }));
+    const formattedSubscriptions = subscriptions.map((sub: any) => {
+      const trend = trendsMap.get(sub.trend_id);
+      if (!trend) {
+        console.log(`No trend data found for subscription: ${sub.trend_id}`);
+      }
+      return {
+        trend_id: sub.trend_id,
+        threshold: sub.threshold,
+        subscribed: sub.subscribed,
+        trend: trend || null,
+      };
+    });
+
+    console.log(`Returning ${formattedSubscriptions.length} subscriptions, ${formattedSubscriptions.filter(s => s.trend !== null).length} with trend data`);
 
     return NextResponse.json({
       subscriptions: formattedSubscriptions,
@@ -130,7 +153,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { trendId, subscribed, threshold } = await request.json();
+    const { trendId, subscribed, threshold, trend: trendData } = await request.json();
 
     if (!trendId) {
       return NextResponse.json(
@@ -162,36 +185,65 @@ export async function POST(request: Request) {
       throw userError;
     }
 
-    // Check if trend exists, if not, try to fetch it from the trends store
-    const { data: existingTrend, error: checkError } = await supabase
-      .from("trends")
-      .select("id")
-      .eq("id", trendId)
-      .single();
+    // Save/update the full trend data if provided (ensures exact content is preserved)
+    if (trendData && subscribed) {
+      // Only save/update trend data when subscribing (not unsubscribing)
+      const trendToSave = {
+        id: trendData.id || trendId,
+        title: trendData.title || `Trend ${trendId}`,
+        category: trendData.category || "General",
+        probability: trendData.probability ?? 50,
+        summary: trendData.summary || "Trend subscription",
+        sources: JSON.stringify(trendData.sources || []),
+        timeline: JSON.stringify(trendData.timeline || []),
+        similar_events: JSON.stringify(trendData.similarEvents || []),
+      };
 
-    if (checkError && checkError.code === "PGRST116") {
-      // Trend doesn't exist - try to fetch from trends store or create a placeholder
-      // This can happen if the trend was just created and not yet stored
-      // We'll create a minimal trend entry to satisfy the foreign key constraint
-      const { error: insertError } = await supabase
+      const { error: trendError } = await supabase
         .from("trends")
-        .insert({
-          id: trendId,
-          title: `Trend ${trendId}`,
-          category: "General",
-          probability: 50,
-          summary: "Trend subscription",
-          sources: "[]",
-          timeline: "[]",
-          similar_events: "[]",
+        .upsert(trendToSave, {
+          onConflict: "id",
+          ignoreDuplicates: false,
         });
 
-      if (insertError) {
-        console.warn("Trend insert error (non-critical):", insertError);
-        // Continue anyway - subscription might still work if RLS allows it
+      if (trendError) {
+        console.error("Error saving trend data:", trendError);
+        // Continue anyway - subscription might still work
+      } else {
+        console.log(`Successfully saved trend data for ${trendId}: ${trendData.title}`);
       }
-    } else if (checkError) {
-      console.warn("Trend check error (non-critical):", checkError);
+    } else if (!trendData && subscribed) {
+      // If subscribing but no trend data provided, log a warning
+      console.warn(`Subscribing to ${trendId} but no trend data provided`);
+    } else {
+      // If trend data not provided, check if trend exists (for backward compatibility)
+      const { data: existingTrend, error: checkError } = await supabase
+        .from("trends")
+        .select("id")
+        .eq("id", trendId)
+        .single();
+
+      if (checkError && checkError.code === "PGRST116") {
+        // Trend doesn't exist - create a minimal placeholder
+        const { error: insertError } = await supabase
+          .from("trends")
+          .insert({
+            id: trendId,
+            title: `Trend ${trendId}`,
+            category: "General",
+            probability: 50,
+            summary: "Trend subscription",
+            sources: "[]",
+            timeline: "[]",
+            similar_events: "[]",
+          });
+
+        if (insertError) {
+          console.warn("Trend insert error (non-critical):", insertError);
+        }
+      } else if (checkError) {
+        console.warn("Trend check error (non-critical):", checkError);
+      }
     }
 
     // Upsert subscription

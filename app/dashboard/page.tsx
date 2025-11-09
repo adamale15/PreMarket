@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import TrendCard from "@/components/trends/TrendCard";
 import TrendDetail from "@/components/trends/TrendDetail";
@@ -13,76 +13,78 @@ export default function DashboardPage() {
   const [activeTrend, setActiveTrend] = useState<Trend | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  useEffect(() => {
-    const fetchSubscriptions = async () => {
-      setLoading(true);
-      try {
-        let trendIds: string[] = [];
+  const fetchSubscriptions = useCallback(async () => {
+    setLoading(true);
+    try {
+      let trendIds: string[] = [];
 
+      if (isSignedIn) {
+        const response = await fetch("/api/user/subscriptions");
+        const data = await response.json();
+        if (data.subscriptions && Array.isArray(data.subscriptions)) {
+          trendIds = data.subscriptions.map((sub: any) => sub.trend_id);
+        }
+      } else {
+        // Fallback to localStorage for non-signed-in users
+        if (typeof window !== "undefined") {
+          for (const k of Object.keys(localStorage))
+            if (k.startsWith("tf_sub_")) {
+              try {
+                const v = JSON.parse(localStorage.getItem(k) || "{}");
+                if (v.subscribed) trendIds.push(k.replace("tf_sub_", ""));
+              } catch {}
+            }
+        }
+      }
+
+      // Fetch full trend data for each subscription
+      if (trendIds.length > 0) {
         if (isSignedIn) {
+          // For signed-in users, subscriptions API now returns trend data
           const response = await fetch("/api/user/subscriptions");
           const data = await response.json();
+
           if (data.subscriptions && Array.isArray(data.subscriptions)) {
-            trendIds = data.subscriptions.map((sub: any) => sub.trend_id);
-          }
-        } else {
-          // Fallback to localStorage for non-signed-in users
-          if (typeof window !== "undefined") {
-            for (const k of Object.keys(localStorage))
-              if (k.startsWith("tf_sub_")) {
-                try {
-                  const v = JSON.parse(localStorage.getItem(k) || "{}");
-                  if (v.subscribed) trendIds.push(k.replace("tf_sub_", ""));
-                } catch {}
-              }
-          }
-        }
-
-        // Fetch full trend data for each subscription
-        if (trendIds.length > 0) {
-          if (isSignedIn) {
-            // For signed-in users, subscriptions API now returns trend data
-            const response = await fetch("/api/user/subscriptions");
-            const data = await response.json();
-
-            if (data.subscriptions && Array.isArray(data.subscriptions)) {
-              const subscribedTrends = data.subscriptions
-                .map((sub: any) => sub.trend)
-                .filter((trend: Trend | null) => trend !== null) as Trend[];
-              setSubs(subscribedTrends);
-            } else {
-              setSubs([]);
-            }
+            // Filter to only subscribed trends (subscribed === true)
+            const subscribedTrends = data.subscriptions
+              .filter((sub: any) => sub.subscribed === true)
+              .map((sub: any) => sub.trend)
+              .filter((trend: Trend | null) => trend !== null) as Trend[];
+            setSubs(subscribedTrends);
           } else {
-            // For non-signed-in users, fetch from localStorage and try to get trend data
-            // Try fetching from trends store
-            try {
-              const trendsResponse = await fetch("/api/trends/store");
-              const trendsData = await trendsResponse.json();
-
-              const subscribedTrends = (trendsData.trends || []).filter(
-                (trend: Trend) => trendIds.includes(trend.id),
-              );
-
-              setSubs(subscribedTrends);
-            } catch (err) {
-              console.error("Error fetching trends:", err);
-              setSubs([]);
-            }
+            setSubs([]);
           }
         } else {
-          setSubs([]);
-        }
-      } catch (error) {
-        console.error("Error fetching subscriptions:", error);
-        setSubs([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+          // For non-signed-in users, fetch from localStorage and try to get trend data
+          // Try fetching from trends store
+          try {
+            const trendsResponse = await fetch("/api/trends/store");
+            const trendsData = await trendsResponse.json();
 
-    fetchSubscriptions();
+            const subscribedTrends = (trendsData.trends || []).filter(
+              (trend: Trend) => trendIds.includes(trend.id),
+            );
+
+            setSubs(subscribedTrends);
+          } catch (err) {
+            console.error("Error fetching trends:", err);
+            setSubs([]);
+          }
+        }
+      } else {
+        setSubs([]);
+      }
+    } catch (error) {
+      console.error("Error fetching subscriptions:", error);
+      setSubs([]);
+    } finally {
+      setLoading(false);
+    }
   }, [isSignedIn]);
+
+  useEffect(() => {
+    fetchSubscriptions();
+  }, [fetchSubscriptions]);
 
   const earnings = useMemo(() => {
     const base = subs.length * 12;
@@ -148,6 +150,10 @@ export default function DashboardPage() {
         onClose={() => {
           setIsDetailOpen(false);
           setActiveTrend(null);
+        }}
+        onSubscriptionChange={() => {
+          // Refresh subscriptions only when subscription status actually changes
+          fetchSubscriptions();
         }}
       />
     </div>

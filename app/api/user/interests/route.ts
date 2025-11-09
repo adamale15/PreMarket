@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 export async function GET() {
   try {
     const { userId } = await auth();
-    
+
     if (!userId) {
       return NextResponse.json({ interests: [] }, { status: 200 });
     }
@@ -41,7 +41,7 @@ export async function GET() {
     console.error("Error fetching user interests:", error);
     return NextResponse.json(
       { error: "Failed to fetch interests" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -49,12 +49,9 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const { userId } = await auth();
-    
+
     if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { interests } = await request.json();
@@ -62,7 +59,7 @@ export async function POST(request: Request) {
     if (!Array.isArray(interests)) {
       return NextResponse.json(
         { error: "Interests must be an array" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -77,7 +74,7 @@ export async function POST(request: Request) {
         },
         {
           onConflict: "clerk_user_id",
-        }
+        },
       )
       .select("interests")
       .single();
@@ -91,8 +88,7 @@ export async function POST(request: Request) {
     console.error("Error saving user interests:", error);
     return NextResponse.json(
       { error: "Failed to save interests" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
-
