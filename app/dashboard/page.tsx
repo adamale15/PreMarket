@@ -46,10 +46,27 @@ export default function DashboardPage() {
 
           if (data.subscriptions && Array.isArray(data.subscriptions)) {
             // Filter to only subscribed trends (subscribed === true)
+            // Include all subscriptions, even if trend data is missing (will show fallback)
             const subscribedTrends = data.subscriptions
               .filter((sub: any) => sub.subscribed === true)
-              .map((sub: any) => sub.trend)
-              .filter((trend: Trend | null) => trend !== null) as Trend[];
+              .map((sub: any) => {
+                if (sub.trend) {
+                  return sub.trend;
+                } else {
+                  // Create a fallback trend if data is missing
+                  console.warn(`Missing trend data for subscription: ${sub.trend_id}`);
+                  return {
+                    id: sub.trend_id,
+                    title: `Trend ${sub.trend_id}`,
+                    category: "General",
+                    probability: 50,
+                    summary: "Trend data is being loaded...",
+                    sources: [],
+                    timeline: [],
+                    similarEvents: [],
+                  } as Trend;
+                }
+              }) as Trend[];
             setSubs(subscribedTrends);
           } else {
             setSubs([]);

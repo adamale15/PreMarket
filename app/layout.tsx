@@ -2,6 +2,7 @@ import "../global.css";
 import React from "react";
 import { Providers } from "@/components/providers";
 import { ConditionalLayout } from "@/components/ConditionalLayout";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata = {
   title: "PreMarket — Predictive trend platform",
@@ -20,6 +21,7 @@ export default function RootLayout({
         <Providers>
           <div className="min-h-screen flex flex-col">
             <ConditionalLayout>{children}</ConditionalLayout>
+            <Analytics />
           </div>
         </Providers>
       </body>

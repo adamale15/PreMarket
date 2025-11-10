@@ -55,17 +55,23 @@ export async function GET(request: Request) {
       .eq("subscribed", true);
 
     if (error) {
+      console.error("Error fetching subscriptions:", error);
       throw error;
     }
 
     if (!subscriptions || subscriptions.length === 0) {
+      console.log(`No subscriptions found for user ${user.id}`);
       return NextResponse.json({
         subscriptions: [],
       });
     }
 
+    console.log(`Found ${subscriptions.length} subscriptions for user ${user.id}`);
+
     // Fetch trend data for all subscribed trends
     const trendIds = subscriptions.map((sub: any) => sub.trend_id);
+    console.log(`Fetching trend data for ${trendIds.length} trends:`, trendIds.slice(0, 5));
+    
     const { data: trends, error: trendsError } = await supabase
       .from("trends")
       .select("*")
@@ -84,20 +90,24 @@ export async function GET(request: Request) {
       });
     }
 
+    console.log(`Found ${trends?.length || 0} trends in database out of ${trendIds.length} requested`);
+
     // Create a map of trend_id -> trend data
     const trendsMap = new Map();
     
     // Process all trends - only filter out obvious placeholders
     (trends || []).forEach((trend: any) => {
       // Only filter out clear placeholders (not real trends)
+      // Be more strict: only filter if BOTH title and summary are placeholders
       const isPlaceholder = 
-        (trend.title === `Trend ${trend.id}`) ||
-        (trend.summary === "Trend subscription" && trend.title?.startsWith("Trend ")) ||
-        (!trend.title || trend.title.trim() === "");
+        (!trend.title || trend.title.trim() === "") ||
+        (trend.title === `Trend ${trend.id}` && 
+         trend.summary === "Trend subscription" &&
+         (!trend.sources || (Array.isArray(trend.sources) ? trend.sources.length === 0 : JSON.parse(trend.sources || "[]").length === 0)));
       
       // Skip only obvious placeholders
       if (isPlaceholder) {
-        console.log(`Filtering out placeholder trend: ${trend.id}`);
+        console.log(`Filtering out placeholder trend: ${trend.id} (title: "${trend.title}", summary: "${trend.summary}")`);
         return;
       }
 
@@ -118,7 +128,7 @@ export async function GET(request: Request) {
     const formattedSubscriptions = subscriptions.map((sub: any) => {
       const trend = trendsMap.get(sub.trend_id);
       if (!trend) {
-        console.log(`No trend data found for subscription: ${sub.trend_id}`);
+        console.warn(`No trend data found for subscription: ${sub.trend_id} (trend may not exist in trends table or was filtered as placeholder)`);
       }
       return {
         trend_id: sub.trend_id,
@@ -128,7 +138,9 @@ export async function GET(request: Request) {
       };
     });
 
-    console.log(`Returning ${formattedSubscriptions.length} subscriptions, ${formattedSubscriptions.filter(s => s.trend !== null).length} with trend data`);
+    const subscriptionsWithTrendData = formattedSubscriptions.filter(s => s.trend !== null).length;
+    const subscriptionsWithoutTrendData = formattedSubscriptions.length - subscriptionsWithTrendData;
+    console.log(`Returning ${formattedSubscriptions.length} subscriptions: ${subscriptionsWithTrendData} with trend data, ${subscriptionsWithoutTrendData} without trend data`);
 
     return NextResponse.json({
       subscriptions: formattedSubscriptions,
