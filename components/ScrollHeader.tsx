@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useUser, SignOutButton } from "@clerk/nextjs";
-import { Sparkles, Bell, LogOut } from "lucide-react";
+import { Sparkles, Bell, LogOut, Menu, X } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 export function ScrollHeader() {
   const { isSignedIn } = useUser();
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -23,11 +24,23 @@ export function ScrollHeader() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Close mobile menu when clicking outside or on a link
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isMobileMenuOpen]);
+
   return (
     <header
       className={cn(
         "sticky top-0 z-30 transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden",
-        isScrolled ? "px-4 pt-2" : "",
+        isScrolled ? "px-2 sm:px-4 pt-2" : "",
       )}
     >
       <div
@@ -40,13 +53,14 @@ export function ScrollHeader() {
       >
         <div
           className={cn(
-            "flex items-center justify-center transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] min-w-0 w-full relative h-full",
-            isScrolled ? "px-6" : "container mx-auto px-6",
+            "flex items-center justify-between transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] min-w-0 w-full relative h-full",
+            isScrolled ? "px-3 sm:px-6" : "container mx-auto px-3 sm:px-6",
           )}
         >
           <Link
             href="/"
             className="flex items-center gap-2 group min-w-0 flex-shrink-0 z-10"
+            onClick={() => setIsMobileMenuOpen(false)}
           >
             <div
               className={cn(
@@ -64,13 +78,15 @@ export function ScrollHeader() {
             <span
               className={cn(
                 "font-extrabold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent transition-[font-size] duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] whitespace-nowrap",
-                isScrolled ? "text-lg" : "text-xl",
+                isScrolled ? "text-base sm:text-lg" : "text-lg sm:text-xl",
               )}
             >
               PreMarket
             </span>
           </Link>
-          <nav className="flex items-center gap-2 flex-1 justify-center absolute left-0 right-0 top-0 bottom-0">
+          
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center gap-2 flex-1 justify-center absolute left-0 right-0 top-0 bottom-0">
             <Link
               href="/"
               className={cn(
@@ -89,7 +105,9 @@ export function ScrollHeader() {
               Dashboard
             </Link>
           </nav>
-          <div className="flex items-center gap-3 flex-shrink-0 z-10 ml-auto">
+
+          {/* Desktop Actions */}
+          <div className="hidden md:flex items-center gap-3 flex-shrink-0 z-10 ml-auto">
             {isSignedIn && (
               <button
                 className={cn(
@@ -157,8 +175,83 @@ export function ScrollHeader() {
             )}
             <ThemeToggle />
           </div>
+
+          {/* Mobile Actions */}
+          <div className="flex md:hidden items-center gap-2 flex-shrink-0 z-10">
+            <ThemeToggle />
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className={cn(
+                "inline-flex items-center justify-center rounded-lg backdrop-blur-sm bg-background/50 dark:bg-background/30 border border-border/50 text-foreground hover:bg-background/70 dark:hover:bg-background/50 transition-all duration-300",
+                isScrolled ? "h-8 w-8" : "h-9 w-9",
+              )}
+              aria-label="Toggle menu"
+            >
+              {isMobileMenuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Mobile Menu */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 top-16 z-20 bg-background/95 dark:bg-background/95 backdrop-blur-xl">
+          <div className="flex flex-col h-full">
+            <nav className="flex flex-col gap-2 p-4">
+              <Link
+                href="/"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={cn(
+                  "px-4 py-3 text-base font-medium rounded-lg transition-[background-color,border-color] duration-300 ease-out",
+                  "backdrop-blur-sm bg-background/60 dark:bg-background/40 border border-border/60 hover:bg-background/80 dark:hover:bg-background/60",
+                )}
+              >
+                Home
+              </Link>
+              <Link
+                href="/dashboard"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="px-4 py-3 text-base font-medium rounded-lg text-foreground/70 hover:text-foreground hover:bg-background/50 dark:hover:bg-background/30 transition-[color,background-color] duration-300 ease-out"
+              >
+                Dashboard
+              </Link>
+            </nav>
+            <div className="flex flex-col gap-2 p-4 mt-auto border-t border-border/50">
+              {isSignedIn && (
+                <button
+                  className="inline-flex items-center gap-3 px-4 py-3 text-base font-semibold rounded-lg backdrop-blur-sm bg-primary/90 dark:bg-primary/80 text-primary-foreground shadow-lg border border-primary/20"
+                >
+                  <Bell className="h-5 w-5" />
+                  Notifications
+                </button>
+              )}
+              {isSignedIn ? (
+                <SignOutButton>
+                  <button
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="inline-flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg backdrop-blur-sm bg-background/50 dark:bg-background/30 border border-border/50 text-foreground hover:bg-background/70 dark:hover:bg-background/50 shadow-lg"
+                  >
+                    <LogOut className="h-5 w-5" />
+                    Sign out
+                  </button>
+                </SignOutButton>
+              ) : (
+                <Link
+                  href="/sign-in"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="inline-flex items-center justify-center px-4 py-3 text-base font-semibold rounded-lg backdrop-blur-sm bg-primary/90 dark:bg-primary/80 text-primary-foreground shadow-lg border border-primary/20"
+                >
+                  Sign in
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
